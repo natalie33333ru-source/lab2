@@ -121,29 +121,20 @@ typedef struct {
     long long coef[MAX_LETTERS];       /* вес k-й буквы */
     int       nonzero[MAX_LETTERS];    /* 1, если буква не может быть нулём */
     int       digit[MAX_LETTERS];      /* цифра k-й буквы */
-    int       used[10];
 } state_t;
 
-static int check(const state_t *s)
-{
-    long long sum = 0;
-    for (int k = 0; k < s->n; ++k)
-        sum += s->coef[k] * s->digit[k];
-    return sum == 0;
-}
-
-static int search(state_t *s, int k)
+/* k — номер буквы, used — маска занятых цифр, sum — частичная сумма */
+static int search(state_t *s, int k, unsigned used, long long sum)
 {
     if (k == s->n)
-        return check(s);
+        return sum == 0;
+    const long long c = s->coef[k];
     for (int d = s->nonzero[k]; d < 10; ++d) {
-        if (s->used[d])
+        if (used & (1u << d))
             continue;
-        s->used[d] = 1;
         s->digit[k] = d;
-        if (search(s, k + 1))
+        if (search(s, k + 1, used | (1u << d), sum + c * d))
             return 1;
-        s->used[d] = 0;
     }
     return 0;
 }
@@ -164,7 +155,6 @@ static void prepare(const puzzle_t *p, state_t *s)
     }
 }
 
-/* Решает ребус. 1 — решение записано в out, 0 — решений нет, -1 — ошибка формата. */
 int solve(const char *text, char *out, size_t outsz)
 {
     puzzle_t p;
@@ -172,7 +162,7 @@ int solve(const char *text, char *out, size_t outsz)
         return -1;
     state_t s = {0};
     prepare(&p, &s);
-    if (!search(&s, 0))
+    if (!search(&s, 0,0,0))
         return 0;
     int digit_of[26] = {0};
     for (int k = 0; k < s.n; ++k)
