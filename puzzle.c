@@ -123,6 +123,7 @@ typedef struct {
     int       digit[MAX_LETTERS];      /* цифра k-й буквы */
     long long pos[MAX_LETTERS + 1];    /* сумма c j > 0 по j >= k */
     long long neg[MAX_LETTERS + 1];    /* сумма c j < 0 по j >= k */
+    int       letter[MAX_LETTERS];     /* какая буква стоит k-й в переборе */
 } state_t;
 
 /* k — номер буквы, used — маска занятых цифр, sum — частичная сумма */
@@ -161,6 +162,21 @@ static void prepare(const puzzle_t *p, state_t *s)
         if (p->len[w] > 1)
             s->nonzero[index[p->words[w][0] - 'A']] = 1;
     }
+    for (int k = 0; k < s->n; ++k)
+        s->letter[k] = k;
+    for (int i = 1; i < s->n; ++i) {
+        long long c = s->coef[i];
+        int nz = s->nonzero[i], L = s->letter[i], j = i - 1;
+        while (j >= 0 && llabs(s->coef[j]) < llabs(c)) {
+            s->coef[j + 1] = s->coef[j];
+            s->nonzero[j + 1] = s->nonzero[j];
+            s->letter[j + 1] = s->letter[j];
+            --j;
+        }
+        s->coef[j + 1] = c;
+        s->nonzero[j + 1] = nz;
+        s->letter[j + 1] = L;
+    }
     for (int k = s->n - 1; k >= 0; --k) {
         s->pos[k] = s->pos[k + 1] + (s->coef[k] > 0 ? s->coef[k] : 0);
         s->neg[k] = s->neg[k + 1] + (s->coef[k] < 0 ? s->coef[k] : 0);
@@ -178,7 +194,7 @@ int solve(const char *text, char *out, size_t outsz)
         return 0;
     int digit_of[26] = {0};
     for (int k = 0; k < s.n; ++k)
-        digit_of[p.letters[k] - 'A'] = s.digit[k];
+        digit_of[p.letters[s.letter[k]] - 'A'] = s.digit[k];
     puzzle_format(&p, digit_of, out, outsz);
     return 1;
 }
