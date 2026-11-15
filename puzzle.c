@@ -121,6 +121,8 @@ typedef struct {
     long long coef[MAX_LETTERS];       /* вес k-й буквы */
     int       nonzero[MAX_LETTERS];    /* 1, если буква не может быть нулём */
     int       digit[MAX_LETTERS];      /* цифра k-й буквы */
+    long long pos[MAX_LETTERS + 1];    /* сумма c j > 0 по j >= k */
+    long long neg[MAX_LETTERS + 1];    /* сумма c j < 0 по j >= k */
 } state_t;
 
 /* k — номер буквы, used — маска занятых цифр, sum — частичная сумма */
@@ -128,6 +130,12 @@ static int search(state_t *s, int k, unsigned used, long long sum)
 {
     if (k == s->n)
         return sum == 0;
+    unsigned free_d = ~used & 0x3FFu;                /* свободные цифры */
+    long long dmin = __builtin_ctz(free_d);          /* младший единичный бит */
+    long long dmax = 31 - __builtin_clz(free_d);     /* старший единичный бит */
+    if (sum + s->pos[k] * dmax + s->neg[k] * dmin < 0 ||
+        sum + s->pos[k] * dmin + s->neg[k] * dmax > 0)
+        return 0;
     const long long c = s->coef[k];
     for (int d = s->nonzero[k]; d < 10; ++d) {
         if (used & (1u << d))
@@ -152,6 +160,10 @@ static void prepare(const puzzle_t *p, state_t *s)
             s->coef[index[p->words[w][i] - 'A']] += sign * place;
         if (p->len[w] > 1)
             s->nonzero[index[p->words[w][0] - 'A']] = 1;
+    }
+    for (int k = s->n - 1; k >= 0; --k) {
+        s->pos[k] = s->pos[k + 1] + (s->coef[k] > 0 ? s->coef[k] : 0);
+        s->neg[k] = s->neg[k + 1] + (s->coef[k] < 0 ? s->coef[k] : 0);
     }
 }
 
