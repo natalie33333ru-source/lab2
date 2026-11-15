@@ -120,6 +120,7 @@ typedef struct {
     const puzzle_t *p;
     int digit_of[26];   /* цифра каждой буквы */
     int used[10];       /* занята ли цифра */
+    int nonzero[26];    /* 1, если буква начинает многозначное слово */
 } state_t;
 
 static long long word_value(const state_t *s, int w)
@@ -133,9 +134,6 @@ static long long word_value(const state_t *s, int w)
 static int check(const state_t *s)
 {
     const puzzle_t *p = s->p;
-    for (int w = 0; w <= p->n_addends; ++w)
-        if (p->len[w] > 1 && s->digit_of[p->words[w][0] - 'A'] == 0)
-            return 0;
     long long sum = 0;
     for (int w = 0; w < p->n_addends; ++w)
         sum += word_value(s, w);
@@ -147,7 +145,7 @@ static int search(state_t *s, int k)
     if (k == s->p->n_letters)
         return check(s);
     int L = s->p->letters[k] - 'A';
-    for (int d = 0; d < 10; ++d) {
+    for (int d = s->nonzero[L]; d < 10; ++d) {
         if (s->used[d])
             continue;
         s->used[d] = 1;
@@ -165,6 +163,9 @@ int solve(const char *text, char *out, size_t outsz)
     if (puzzle_parse(text, &p) != 0)
         return -1;
     state_t s = {.p = &p};
+    for (int w = 0; w <= p.n_addends; ++w)
+        if (p.len[w] > 1)
+            s.nonzero[p.words[w][0] - 'A'] = 1;
     if (!search(&s, 0))
         return 0;
     puzzle_format(&p, s.digit_of, out, outsz);
