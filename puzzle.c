@@ -117,39 +117,30 @@ static int puzzle_verify(const char *text, const char *answer)
 
 //2. РЕШАТЕЛЬ
 typedef struct {
-    const puzzle_t *p;
-    int digit_of[26];   /* цифра каждой буквы */
-    int used[10];       /* занята ли цифра */
-    int nonzero[26];    /* 1, если буква начинает многозначное слово */
+    int       n;                       /* количество разных букв */
+    long long coef[MAX_LETTERS];       /* вес k-й буквы */
+    int       nonzero[MAX_LETTERS];    /* 1, если буква не может быть нулём */
+    int       digit[MAX_LETTERS];      /* цифра k-й буквы */
+    int       used[10];
 } state_t;
-
-static long long word_value(const state_t *s, int w)
-{
-    long long v = 0;
-    for (int i = 0; i < s->p->len[w]; ++i)
-        v = v * 10 + s->digit_of[s->p->words[w][i] - 'A'];
-    return v;
-}
 
 static int check(const state_t *s)
 {
-    const puzzle_t *p = s->p;
     long long sum = 0;
-    for (int w = 0; w < p->n_addends; ++w)
-        sum += word_value(s, w);
-    return sum == word_value(s, p->n_addends);
+    for (int k = 0; k < s->n; ++k)
+        sum += s->coef[k] * s->digit[k];
+    return sum == 0;
 }
 
 static int search(state_t *s, int k)
 {
-    if (k == s->p->n_letters)
+    if (k == s->n)
         return check(s);
-    int L = s->p->letters[k] - 'A';
-    for (int d = s->nonzero[L]; d < 10; ++d) {
+    for (int d = s->nonzero[k]; d < 10; ++d) {
         if (s->used[d])
             continue;
         s->used[d] = 1;
-        s->digit_of[L] = d;
+        s->digit[k] = d;
         if (search(s, k + 1))
             return 1;
         s->used[d] = 0;
@@ -157,21 +148,38 @@ static int search(state_t *s, int k)
     return 0;
 }
 
+/* Считает веса букв и признаки «не ноль» — один раз, до перебора. */
+static void prepare(const puzzle_t *p, state_t *s)
+{
+    int index[26];                     /* буква -> её номер k */
+    for (int k = 0; k < p->n_letters; ++k)
+        index[p->letters[k] - 'A'] = k;
+    s->n = p->n_letters;
+    for (int w = 0; w <= p->n_addends; ++w) {
+        long long place = 1, sign = (w < p->n_addends) ? 1 : -1;
+        for (int i = p->len[w] - 1; i >= 0; --i, place *= 10)
+            s->coef[index[p->words[w][i] - 'A']] += sign * place;
+        if (p->len[w] > 1)
+            s->nonzero[index[p->words[w][0] - 'A']] = 1;
+    }
+}
+
+/* Решает ребус. 1 — решение записано в out, 0 — решений нет, -1 — ошибка формата. */
 int solve(const char *text, char *out, size_t outsz)
 {
     puzzle_t p;
     if (puzzle_parse(text, &p) != 0)
         return -1;
-    state_t s = {.p = &p};
-    for (int w = 0; w <= p.n_addends; ++w)
-        if (p.len[w] > 1)
-            s.nonzero[p.words[w][0] - 'A'] = 1;
+    state_t s = {0};
+    prepare(&p, &s);
     if (!search(&s, 0))
         return 0;
-    puzzle_format(&p, s.digit_of, out, outsz);
+    int digit_of[26] = {0};
+    for (int k = 0; k < s.n; ++k)
+        digit_of[p.letters[k] - 'A'] = s.digit[k];
+    puzzle_format(&p, digit_of, out, outsz);
     return 1;
 }
-
 /* 3. ЗАМЕР ВРЕМЕНИ
  * Каждый ребус из файла решается, ответ проверяется puzzle_verify().
  * Быстрые решения повторяются сериями >= 2 мс (иначе не хватает
